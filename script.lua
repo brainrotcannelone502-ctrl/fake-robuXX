@@ -3,17 +3,18 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local ChatService = game:GetService("Chat")
 
 local LocalPlayer = Players.LocalPlayer
 
 -- Previnir duplicação do menu na tela
-if game:GetService("CoreGui"):FindFirstChild("Tsk_InteractionPanel_PC_v3") then
-    game:GetService("CoreGui")["Tsk_InteractionPanel_PC_v3"]:Destroy()
+if game:GetService("CoreGui"):FindFirstChild("Tsk_InteractionPanel_PC_Draggable") then
+    game:GetService("CoreGui")["Tsk_InteractionPanel_PC_Draggable"]:Destroy()
 end
 
 -- [[ CRIAÇÃO DA INTERFACE VISUAL ]]
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "Tsk_InteractionPanel_PC_v3"
+ScreenGui.Name = "Tsk_InteractionPanel_PC_Draggable"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = game:GetService("CoreGui")
 
@@ -22,7 +23,7 @@ MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 360, 0, 540)
 MainFrame.Position = UDim2.new(0.5, -180, 0.5, -270)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
-MainFrame.ClipsDescendants = true -- Garante que os botões somem ao minimizar
+MainFrame.ClipsDescendants = true
 MainFrame.Active = true
 MainFrame.Parent = ScreenGui
 
@@ -35,7 +36,7 @@ MainStroke.Color = Color3.fromRGB(85, 35, 145)
 MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
--- Barra de Título (Sempre visível para arrastar e controlar)
+-- Barra de Título (Fundo Visual)
 local TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
 TitleBar.Size = UDim2.new(1, 0, 0, 40)
@@ -53,6 +54,15 @@ Title.TextSize = 13
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TitleBar
 
+-- [[ ÁREA INVISÍVEL ATRAZ DOS BOTÕES PARA PEGAR O ARRASTO PERFEITO ]]
+local DragHandle = Instance.new("ImageButton")
+DragHandle.Name = "DragHandle"
+DragHandle.Size = UDim2.new(1, -80, 1, 0) -- Deixa o espaço dos botões livre para clicar
+DragHandle.Position = UDim2.new(0, 0, 0, 0)
+DragHandle.BackgroundTransparency = 1
+DragHandle.Image = ""
+DragHandle.Parent = TitleBar
+
 -- Botão Fechar (X)
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 26, 0, 26)
@@ -62,11 +72,12 @@ CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextSize = 11
+CloseBtn.ZIndex = 5
 CloseBtn.Parent = TitleBar
 Instance.new("UICorner").CornerRadius = UDim.new(0, 5)
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
--- [[ NOVO: BOTÃO MINIMIZAR (-) ]]
+-- Botão Minimizar (-)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 26, 0, 26)
 MinimizeBtn.Position = UDim2.new(1, -66, 0, 7)
@@ -75,25 +86,16 @@ MinimizeBtn.Text = "-"
 MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.TextSize = 14
+MinimizeBtn.ZIndex = 5
 MinimizeBtn.Parent = TitleBar
 Instance.new("UICorner").CornerRadius = UDim.new(0, 5)
 
 local Minimizado = false
 MinimizeBtn.MouseButton1Click:Connect(function()
     Minimizado = not Minimizado
-    
-    local TamanhoAlvo
-    if Minimizado then
-        TamanhoAlvo = UDim2.new(0, 360, 0, 40) -- Encolhe deixando só a barra do topo
-        MinimizeBtn.Text = "+"
-    else
-        TamanhoAlvo = UDim2.new(0, 360, 0, 540) -- Volta para o tamanho original completo
-        MinimizeBtn.Text = "-"
-    end
-    
-    -- Transição suave ao minimizar/expandir
-    local InfoAnimacao = TweenInfo.new(0.3, Enum.EasingStyle.QuadOut)
-    TweenService:Create(MainFrame, InfoAnimacao, {Size = TamanhoAlvo}):Play()
+    local TamanhoAlvo = Minimizado and UDim2.new(0, 360, 0, 40) or UDim2.new(0, 360, 0, 540)
+    MinimizeBtn.Text = Minimizado and "+" or "-"
+    TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.QuadOut), {Size = TamanhoAlvo}):Play()
 end)
 
 local JogadorSelecionado = nil
@@ -134,7 +136,6 @@ local function AtualizarListaPlayers()
     for _, child in pairs(PlayerScroll:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
     end
-    
     for _, p in pairs(Players:GetPlayers()) do
         local PBtn = Instance.new("TextButton")
         PBtn.Size = UDim2.new(1, -10, 0, 28)
@@ -200,35 +201,9 @@ GridLayout.Parent = GridFrame
 
 local mensagensPredefinidas = {"tmjj", "obg mn", "confiavelll", "chegou msmm", "rpzd te amo pcr"}
 
-local function CriarBalaoDeFalaFalso(playerAlvo, texto)
+local function CriarBalaoDeFalaOriginal(playerAlvo, texto)
     if not playerAlvo or not playerAlvo.Character or not playerAlvo.Character:FindFirstChild("Head") then return end
-    local Head = playerAlvo.Character.Head
-    
-    local Billboard = Instance.new("BillboardGui")
-    Billboard.Size = UDim2.new(0, 180, 0, 45)
-    Billboard.Adornee = Head
-    Billboard.ExtentsOffset = Vector3.new(0, 2.5, 0)
-    Billboard.AlwaysOnTop = true
-    Billboard.Parent = Head
-    
-    local FrameBalao = Instance.new("Frame")
-    FrameBalao.Size = UDim2.new(1, 0, 1, 0)
-    FrameBalao.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    FrameBalao.Parent = Billboard
-    Instance.new("UICorner").CornerRadius = UDim.new(0, 6)
-    
-    local TextLabel = Instance.new("TextLabel")
-    TextLabel.Size = UDim2.new(1, -10, 1, -10)
-    TextLabel.Position = UDim2.new(0, 5, 0, 5)
-    TextLabel.BackgroundTransparency = 1
-    TextLabel.Text = texto
-    TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
-    TextLabel.Font = Enum.Font.GothamSemibold
-    TextLabel.TextSize = 11
-    TextLabel.TextWrapped = true
-    TextLabel.Parent = FrameBalao
-    
-    task.delay(4, function() Billboard:Destroy() end)
+    ChatService:Chat(playerAlvo.Character.Head, texto, Enum.ChatColor.White)
 end
 
 for _, txt in pairs(mensagensPredefinidas) do
@@ -242,31 +217,31 @@ for _, txt in pairs(mensagensPredefinidas) do
     Instance.new("UICorner").CornerRadius = UDim.new(0, 5)
     
     MBtn.MouseButton1Click:Connect(function()
-        if JogadorSelecionado then CriarBalaoDeFalaFalso(JogadorSelecionado, txt) end
+        if JogadorSelecionado then CriarBalaoDeFalaOriginal(JogadorSelecionado, txt) end
     end)
 end
 
 SendCustomBtn.MouseButton1Click:Connect(function()
     if JogadorSelecionado and CustomTextBox.Text ~= "" then
-        CriarBalaoDeFalaFalso(JogadorSelecionado, CustomTextBox.Text)
+        CriarBalaoDeFalaOriginal(JogadorSelecionado, CustomTextBox.Text)
         CustomTextBox.Text = ""
     end
 end)
 
--- [[ SEÇÃO 4: BOTÕES ROCKET & RAGDOLL VISUAL ]]
+-- [[ SEÇÃO 4: BOTÕES ROCKET & RAGDOLL AJUSTADOS NA ALTURA CORRETA ]]
 local ActionFrame = Instance.new("Frame")
-ActionFrame.Size = UDim2.new(1, -30, 0, 40)
-ActionFrame.Position = UDim2.new(0, 15, 0, 360)
+ActionFrame.Size = UDim2.new(1, -30, 0, 42)
+ActionFrame.Position = UDim2.new(0, 15, 0, 360) -- Subiu de 475 para 360 para ficar colado nos balões de texto
 ActionFrame.BackgroundTransparency = 1
 ActionFrame.Parent = MainFrame
 
 local ActionLayout = Instance.new("UIHorizontalLayout")
-ActionLayout.Padding = UDim.new(0, 10)
+ActionLayout.Padding = UDim.new(0, 12)
 ActionLayout.Parent = ActionFrame
 
 -- Rocket
 local RocketBtn = Instance.new("TextButton")
-RocketBtn.Size = UDim2.new(0, 160, 1, 0)
+RocketBtn.Size = UDim2.new(0, 158, 1, 0)
 RocketBtn.BackgroundColor3 = Color3.fromRGB(135, 35, 35)
 RocketBtn.Text = "🚀 Rocket Target"
 RocketBtn.TextColor3 = Color3.fromRGB(255, 225, 225)
@@ -301,7 +276,7 @@ end)
 
 -- Ragdoll
 local RagdollBtn = Instance.new("TextButton")
-RagdollBtn.Size = UDim2.new(0, 160, 1, 0)
+RagdollBtn.Size = UDim2.new(0, 158, 1, 0)
 RagdollBtn.BackgroundColor3 = Color3.fromRGB(45, 95, 145)
 RagdollBtn.Text = "🩻 Ragdoll (Local)"
 RagdollBtn.TextColor3 = Color3.fromRGB(225, 240, 255)
@@ -338,11 +313,11 @@ RagdollBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- [[ SEÇÃO 5: SISTEMA DE ARRASTO RECONHECIDO NO PC ]]
+-- [[ NOVO SISTEMA DE ARRASTO INDUSTRIAL PARA PC (VIA DRAGHANDLE) ]]
 local Dragging = false
 local DragInput, DragStart, StartPos
 
-MainFrame.InputBegan:Connect(function(input)
+DragHandle.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         Dragging = true
         DragStart = input.Position
@@ -356,7 +331,7 @@ MainFrame.InputBegan:Connect(function(input)
     end
 end)
 
-MainFrame.InputChanged:Connect(function(input)
+DragHandle.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement then
         DragInput = input
     end
